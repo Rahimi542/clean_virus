@@ -1,0 +1,80 @@
+<!-- ------------------- caller.html ------------------- -->
+<!DOCTYPE html><html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Viewer</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f4f6f9;
+      text-align: center;
+      padding: 2rem;
+    }
+    h1 { color: #333; }
+    input {
+      padding: 0.7rem;
+      width: 60%;
+      max-width: 300px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+    }
+    button {
+      padding: 0.7rem 1.2rem;
+      margin-top: 1rem;
+      border: none;
+      background-color: #007bff;
+      color: white;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    video {
+      margin-top: 2rem;
+      width: 80%;
+      max-width: 600px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.3);
+    }
+    #link { margin-top: 1rem; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>Private Video Viewer</h1>
+  <input type="text" id="room" placeholder="Enter Room ID" />
+  <button onclick="startCall()">Generate Call Link</button>
+  <p id="link"></p>
+  <video id="remoteVideo" autoplay playsinline></video>  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>  <script>
+    const socket = io("https://cat-vagabond-huckleberry.glitch.me/");
+    let peer;
+
+    function startCall() {
+      const room = document.getElementById("room").value.trim();
+      if (!room) return alert("Please enter a Room ID");
+
+      const link = `${window.location.origin}/receiver.html?room=${room}`;
+      document.getElementById("link").innerHTML = `Send this link: <a href='${link}' target='_blank'>${link}</a>`;
+
+      socket.emit("join", room);
+      peer = new RTCPeerConnection();
+
+      peer.ontrack = (event) => {
+        document.getElementById("remoteVideo").srcObject = event.streams[0];
+      };
+
+      peer.onicecandidate = e => {
+        if (e.candidate) socket.emit("signal", { room, signal: { candidate: e.candidate } });
+      };
+
+      socket.on("joined", async () => {
+        const offer = await peer.createOffer();
+        await peer.setLocalDescription(offer);
+        socket.emit("signal", { room, signal: { sdp: offer } });
+      });
+
+      socket.on("signal", async ({ signal }) => {
+        if (signal.sdp) await peer.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+        if (signal.candidate) await peer.addIceCandidate(new RTCIceCandidate(signal.candidate));
+      });
+    }
+  </script></body>
+</html>

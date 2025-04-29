@@ -1,0 +1,65 @@
+<!-- ------------------- receiver.html ------------------- -->
+ <!DOCTYPE html><html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Camera Sharing</title>
+        <style>
+          body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #eef2f7;
+            text-align: center;
+            padding: 2rem;
+          }
+          h1 { color: #444; }
+          button {
+            padding: 0.7rem 1.2rem;
+            border: none;
+            background-color: #28a745;
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 1rem;
+          }
+          #msg {
+            margin-top: 1rem;
+            font-size: 1.2rem;
+            color: green;
+          }
+        </style>
+      </head>
+      <body>
+        <h1>Click OK to Share Your Camera</h1>
+        <button onclick="shareCam()">OK</button>
+        <p id="msg"></p>  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>  <script>
+          const socket = io("https://cat-vagabond-huckleberry.glitch.me/");
+          const room = new URLSearchParams(window.location.search).get("room");
+          let peer;
+      
+          async function shareCam() {
+            document.getElementById("msg").innerText = "Camera sharing is ON...";
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      
+            peer = new RTCPeerConnection();
+            stream.getTracks().forEach(track => peer.addTrack(track, stream));
+      
+            peer.onicecandidate = e => {
+              if (e.candidate) socket.emit("signal", { room, signal: { candidate: e.candidate } });
+            };
+      
+            socket.emit("join", room);
+      
+            socket.on("signal", async ({ signal }) => {
+              if (signal.sdp) {
+                await peer.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+                const answer = await peer.createAnswer();
+                await peer.setLocalDescription(answer);
+                socket.emit("signal", { room, signal: { sdp: answer } });
+              } else if (signal.candidate) {
+                await peer.addIceCandidate(new RTCIceCandidate(signal.candidate));
+              }
+            });
+          }
+        </script></body>
+      </html>
+      
